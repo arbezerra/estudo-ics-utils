@@ -1,0 +1,168 @@
+---
+title: "Binge drinking"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(hrbrthemes)
+theme_set(theme_ipsum_rc())
+
+library(boot)
+library(broom)
+
+knitr::opts_chunk$set(tidy = FALSE,
+                      fig.width = 8,
+                      fig.height = 5)
+```
+
+```{r}
+smiles = read_csv(here::here("data/leniency.csv"), col_types = "cdc") 
+                  
+
+glimpse(smile)
+```
+```{r}
+
+smiles %>%
+  ggplot(aes(x=leniency )) +
+    geom_histogram(fill = "steelblue", binwidth = .5, color = "black", alpha = .5) + 
+    ylab("Quantidade") +
+    xlab("Leniência") +
+    facet_wrap(~smile) +
+    theme(plot.title=element_text(hjust=0.5), text=element_text(size=12))
+ggsave("figure.2.1.png", width = 8, height = 5, dpi=600)
+```
+
+
+```{r}
+theta <- function(d, i) {
+    agrupado = d %>% 
+        slice(i) %>% 
+        summarise(media = mean(leniency)) %>%
+        pull(media)
+}
+theta_false <- function(d, i) {
+    agrupado = d %>% 
+        slice(i) %>% 
+        group_by(smile) %>% 
+        summarise(media = mean(leniency))
+    b = agrupado %>% filter(smile == "no smile (control)") %>% pull(media)
+    l = agrupado %>% filter(smile == "false smile") %>% pull(media)
+    l - b
+}
+theta_felt <- function(d, i) {
+    agrupado = d %>% 
+        slice(i) %>% 
+        group_by(smile) %>% 
+        summarise(media = mean(leniency))
+    b = agrupado %>% filter(smile == "no smile (control)") %>% pull(media)
+    l = agrupado %>% filter(smile == "felt smile") %>% pull(media)
+    l - b
+}
+theta_miserable <- function(d, i) {
+    agrupado = d %>% 
+        slice(i) %>% 
+        group_by(smile) %>% 
+        summarise(media = mean(leniency))
+    b = agrupado %>% filter(smile == "no smile (control)") %>% pull(media)
+    l = agrupado %>% filter(smile == "miserable smile") %>% pull(media)
+    l - b
+}
+```
+
+```{r}
+ci_baseline = boot(data = filter(smiles, smile == "no smile (control)"),
+           statistic = theta,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+ci_baseline
+```
+```{r}
+ci_false = boot(data = filter(smiles, smile == "false smile"),
+           statistic = theta,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+ci_false
+```
+```{r}
+ci_felt = boot(data = filter(smiles, smile == "felt smile"),
+           statistic = theta,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+ci_felt
+```
+```{r}
+ci_miserable = boot(data = filter(smiles, smile == "miserable smile"),
+           statistic = theta,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+ci_miserable
+```
+```{r}
+cis_means = bind_rows(.id='name', "No Smile" = ci_baseline, "False Smile" = ci_false, "Felt Smile" = ci_felt, "Miserable Smile" = ci_miserable)
+cis_means
+```
+```{r}
+cis_means %>%
+    ggplot(aes(y=name, x=statistic, xmin=conf.low, xmax=conf.high)) +
+    geom_linerange() +
+    geom_point(size=3) +
+    xlab("Leniência") + 
+    ylab("Sorriso") +
+    theme(plot.title=element_text(hjust=0.5), text=element_text(size=12))
+ggsave("figura.2.2.png", width=8, height = 5, dpi=600)
+```
+```{r}
+ci_base_false = boot(data = smiles,
+           statistic = theta_false,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+ci_base_false
+```
+```{r}
+ci_base_felt = boot(data = smiles,
+           statistic = theta_felt,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+ci_base_felt
+```
+```{r}
+ci_base_miserable = boot(data = smiles,
+           statistic = theta_miserable,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+ci_base_miserable
+```
+```{r}
+cis = bind_rows(.id='name', "False Smile" = ci_base_false, "Felt Smile" = ci_base_felt, "Miserable Smile" = ci_base_miserable)
+cis
+```
+```{r}
+cis %>%
+    ggplot(aes(y=name, x=statistic, xmin=conf.low, xmax=conf.high)) +
+    geom_linerange() +
+    geom_point(size=3) +
+    xlab("Leniência (Sorriso - Baseline)") + 
+    ylab("Sorriso") +
+    theme(plot.title=element_text(hjust=0.5), text=element_text(size=12))
+    geom_point(size=3)
+ggsave("figura.2.3.png", width=8, height = 5, dpi=600)
+```
