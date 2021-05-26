@@ -44,6 +44,7 @@ theta <- function(d, i) {
         slice(i) %>% 
         summarise(media = mean(leniency)) %>%
         pull(media)
+    agrupado
 }
 theta_false <- function(d, i) {
     agrupado = d %>% 
@@ -155,14 +156,28 @@ ci_base_miserable
 cis = bind_rows(.id='name', "False Smile" = ci_base_false, "Felt Smile" = ci_base_felt, "Miserable Smile" = ci_base_miserable)
 cis
 ```
+
 ```{r}
-cis %>%
-    ggplot(aes(y=name, x=statistic, xmin=conf.low, xmax=conf.high)) +
-    geom_linerange() +
-    geom_point(size=3) +
-    xlab("Leniência (Sorriso - Baseline)") + 
-    ylab("Sorriso") +
-    theme(plot.title=element_text(hjust=0.5), text=element_text(size=12))
-    geom_point(size=3)
-ggsave("figura.2.3.png", width=8, height = 5, dpi=600)
+t.test(smiles %>% filter(with_smile == "yes") %>% pull(leniency),
+       smiles %>% filter(with_smile == "no") %>% pull(leniency))%>% 
+  tidy()
 ```
+
+```{r}
+t.test(smiles %>% filter(smile == "felt smile") %>% pull(leniency),
+       smiles %>% filter(smile == "no smile (control)") %>% pull(leniency))%>% 
+  tidy()
+```
+
+```{r}
+t.test(smiles %>% filter(smile == "false smile") %>% pull(leniency),
+       smiles %>% filter(smile == "no smile (control)") %>% pull(leniency))%>% 
+  tidy()
+```
+
+```{r}
+t.test(smiles %>% filter(smile == "miserable smile") %>% pull(leniency),
+       smiles %>% filter(smile == "no smile (control)") %>% pull(leniency))%>% 
+  tidy()
+```
+

@@ -67,11 +67,59 @@ ggsave("figure3.png", width = 8, height = 5, dpi=600)
 ```
 
 ```{r}
+theta_math <- function(d, i) {
+    r = d %>% 
+        slice(i) %>% 
+        summarise(r = cor(Math, Comp, method = "pearson")) %>%
+        pull(r)
+    r
+}
+ci_math = boot(data = sat_gpa,
+           statistic = theta_math,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+ci_math
+```
+```{r}
+theta_verb <- function(d, i) {
+    r = d %>% 
+        slice(i) %>% 
+        summarise(r = cor(Verb, Comp, method = "pearson")) %>%
+        pull(r)
+    r
+}
+ci_verb = boot(data = sat_gpa,
+           statistic = theta_verb,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+ci_verb
+```
+```{r}
+cis = bind_rows(.id='name', "Verb" = ci_verb, "Math" = ci_math)
+cis
+```
+```{r}
+cis %>%
+    ggplot(aes(y=name, x=statistic, xmin=conf.low, xmax=conf.high)) +
+    geom_linerange() +
+    geom_point(size=3) +
+    xlab("Coeficiente de Pearson (r)") + 
+    ylab("SAT") +
+    theme(plot.title=element_text(hjust=0.5), text=element_text(size=12))
+    geom_point(size=3)
+ggsave("figura.4.png", width=8, height = 5, dpi=600)
+```
 
-sat_gpa %>%
-  summarise(
-    r_math = cor(Math, Comp, method = "pearson"),
-    r_verb = cor(Verb, Comp, method = "pearson")
-    )
+```{r}
+cor.test(sat_gpa$Math, sat_gpa$Comp) %>%
+  tidy()
+```
+```{r}
+cor.test(sat_gpa$Verb, sat_gpa$Comp) %>%
+  tidy()
 ```
 
