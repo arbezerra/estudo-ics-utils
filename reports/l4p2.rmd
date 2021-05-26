@@ -1,0 +1,318 @@
+---
+title: "L4P2: Testes de hipótese e p-valores"
+output: html_document
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(hrbrthemes)
+theme_set(theme_ipsum_rc())
+
+library(boot)
+library(broom)
+
+knitr::opts_chunk$set(tidy = FALSE,
+                      fig.width = 8,
+                      fig.height = 5)
+```
+
+Import dos dados
+
+```{r}
+sat_gpa = read_csv(here::here("data/sat-gpa.csv"), col_types = "iidd") %>%
+  rename("Math" = math_SAT, "Verb" = verb_SAT, "Comp" = comp_GPA, "Geral" = univ_GPA)
+glimpse(sat_gpa)
+```
+
+```{r}
+smiles = read_csv(here::here("data/leniency.csv"), col_types = "cdc") 
+glimpse(smiles)
+```
+
+Calculo dos interválos de confiança
+
+```{r}
+theta_math <- function(d, i) {
+    r = d %>% 
+        slice(i) %>% 
+        summarise(r = cor(Math, Comp, method = "pearson")) %>%
+        pull(r)
+    r
+}
+ci_math = boot(data = sat_gpa,
+           statistic = theta_math,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+theta_verb <- function(d, i) {
+    r = d %>% 
+        slice(i) %>% 
+        summarise(r = cor(Verb, Comp, method = "pearson")) %>%
+        pull(r)
+    r
+}
+ci_verb = boot(data = sat_gpa,
+           statistic = theta_verb,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+cis_sta = bind_rows(.id='name', "Verb" = ci_verb, "Math" = ci_math)
+```
+
+```{r}
+theta <- function(d, i) {
+    agrupado = d %>% 
+        slice(i) %>% 
+        summarise(media = mean(leniency)) %>%
+        pull(media)
+    agrupado
+}
+theta_false <- function(d, i) {
+    agrupado = d %>% 
+        slice(i) %>% 
+        group_by(smile) %>% 
+        summarise(media = mean(leniency))
+    b = agrupado %>% filter(smile == "no smile (control)") %>% pull(media)
+    l = agrupado %>% filter(smile == "false smile") %>% pull(media)
+    l - b
+}
+theta_felt <- function(d, i) {
+    agrupado = d %>% 
+        slice(i) %>% 
+        group_by(smile) %>% 
+        summarise(media = mean(leniency))
+    b = agrupado %>% filter(smile == "no smile (control)") %>% pull(media)
+    l = agrupado %>% filter(smile == "felt smile") %>% pull(media)
+    l - b
+}
+theta_miserable <- function(d, i) {
+    agrupado = d %>% 
+        slice(i) %>% 
+        group_by(smile) %>% 
+        summarise(media = mean(leniency))
+    b = agrupado %>% filter(smile == "no smile (control)") %>% pull(media)
+    l = agrupado %>% filter(smile == "miserable smile") %>% pull(media)
+    l - b
+}
+
+ci_baseline = boot(data = filter(smiles, smile == "no smile (control)"),
+           statistic = theta,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+
+ci_false = boot(data = filter(smiles, smile == "false smile"),
+           statistic = theta,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+
+ci_felt = boot(data = filter(smiles, smile == "felt smile"),
+           statistic = theta,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+
+ci_miserable = boot(data = filter(smiles, smile == "miserable smile"),
+           statistic = theta,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+cis_means = bind_rows(.id='name', "No Smile" = ci_baseline, "False Smile" = ci_false, "Felt Smile" = ci_felt, "Miserable Smile" = ci_miserable)
+
+ci_base_false = boot(data = smiles,
+           statistic = theta_false,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+
+ci_base_felt = boot(data = smiles,
+           statistic = theta_felt,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+
+ci_base_miserable = boot(data = smiles,
+           statistic = theta_miserable,
+           R = 2000) %>%
+    tidy(conf.level = .95,
+         conf.method = "bca",
+         conf.int = TRUE)
+
+cis_smiles_comp = bind_rows(.id='name', "False Smile" = ci_base_false, "Felt Smile" = ci_base_felt, "Miserable Smile" = ci_base_miserable)
+```
+
+# Relação SAT e GPA
+
+Os dados se tratam de uma pesquisa com alunos que se formaram em Computação em uma universidade americana. Foram coletados dados da prova SAT e do desempenho deles no curso de Computação (GPA). [1]
+
+## Os dados
+
+Como podemos ver no histograma abaixo (Figura 1), temos que a distribuição de SAT para Matemática é assimétrica com cauda à direita, mais concentrado por volta de 550, enquanto para Expressão Verbal é uma distribuição simétrica, com centro em aproximadamente 600.
+
+
+```{r}
+sat_gpa %>%
+  pivot_longer(c(Math, Verb), values_to = "SAT") %>%
+  ggplot(aes(x=SAT )) +
+    geom_histogram(fill = "steelblue", binwidth = 20, color = "black", alpha = .5) + 
+    ylab("Quantidade") +
+    xlab("SAT") +
+    facet_wrap(~name) +
+    theme(plot.title=element_text(hjust=0.5), text=element_text(size=12)) +
+    labs(caption = "Figura 1: Histograma de SAT agrupados por Área de Conhecimento.")
+ggsave("figure1.png", width = 8, height = 5, dpi=600)
+```
+
+
+Para os dados de GPA, o histograma (Figura 2) mostra uma distribuição assimétrica com cauda à esquerda, tanto para Computação como em Geral, se concentrando por volta de 3.3.
+
+```{r}
+sat_gpa %>%
+  pivot_longer(c(Comp, Geral), values_to = "GPA") %>%
+  ggplot(aes(x=GPA )) +
+    geom_histogram(fill = "steelblue", binwidth = .1, color = "black", alpha = .5) + 
+    ylab("Quantidade") +
+    xlab("GPA") +
+    facet_wrap(~name) +
+    theme(plot.title=element_text(hjust=0.5), text=element_text(size=12)) +
+    labs(caption = "Figura 2: Histograma de GPA agrupados por Área de Conhecimento.")
+ggsave("figure2.png", width = 8, height = 5, dpi=600)
+```
+
+
+## Correlação
+
+Podemos visualizar na distribuição SAT x GPA (Figura 3), que ambas têm uma correlação positiva entre si. Para Matemática calculamos um r = 0.69 e em Expressão Verbal r = 0.64. Podemos notar uma diferença desprezível nas duas áreas. Em azul temos a reta calculada pela regressão linear dos dados.
+
+```{r}
+sat_gpa %>%
+  pivot_longer(c(Math, Verb), values_to = "SAT") %>%
+  ggplot(aes(x=SAT, y=Comp )) +
+    geom_point(alpha=.5, size=2)+
+    ylab("Computation GPA") +
+    facet_wrap(~name) +
+    geom_smooth(method = "lm", se = FALSE)+
+    theme(plot.title=element_text(hjust=0.5), text=element_text(size=12)) +
+    labs(caption = "Figura 3: Distribuição SAT x GPA agrupados por Área de Conhecimento.")
+ggsave("figure3.png", width = 8, height = 5, dpi=600)
+```
+
+
+Calculando o intervalo de confiança de 95% do coeficiente de Pearson, **notamos que temos uma correlação forte entre matemática e computação [0.58, 0.77] (p = 5.3e-16), enquanto que em Expressão verbal é plausível que seja ou uma relação média, ou forte [0.50, 0.73] (p = 2.3e-13).** Podemos melhor visualizar os intervalos na figura 4.
+
+
+```{r}
+cis_sta %>%
+    ggplot(aes(y=name, x=statistic, xmin=conf.low, xmax=conf.high)) +
+    geom_linerange() +
+    geom_point(size=3) +
+    xlab("Coeficiente de Pearson (r)") + 
+    ylab("SAT") +
+    theme(plot.title=element_text(hjust=0.5), text=element_text(size=12)) +
+    geom_point(size=3) +
+    labs(caption = "Figura 4: Correlação linear entre SAT e GPA de Computação.")
+ggsave("figure4.png", width=8, height = 5, dpi=600)
+```
+
+## Teste de Hipótese
+
+```{r}
+cor.test(sat_gpa$Math, sat_gpa$Comp) %>%
+  tidy()
+```
+```{r}
+cor.test(sat_gpa$Verb, sat_gpa$Comp) %>%
+  tidy()
+```
+
+# Experimento com Sorrisos
+
+Os dados foram coletados com questionários a fim de estudar o impacto do sorriso no julgamento de culpa das pessoas. O dado de leniência varia de 0 a 9, quanto mais próximo de 9, mas leniente foi o julgamento do entrevistado. [2,3]
+
+## Os Dados
+
+Vemos que em sua maioria, as distribuições são assimétricas com cauda à direita (Figura 5).
+
+```{r}
+smiles %>%
+  ggplot(aes(x=leniency )) +
+    geom_histogram(fill = "steelblue", binwidth = .5, color = "black", alpha = .5) + 
+    ylab("Quantidade") +
+    xlab("Leniência") +
+    facet_wrap(~smile) +
+    theme(plot.title=element_text(hjust=0.5), text=element_text(size=12)) +
+    labs(caption = "Figura 5: Histograma de Leniência agrupados por Sorriso")
+ggsave("figure5.png", width = 8, height = 5, dpi=600)
+```
+
+Na Figura 6, temos as médias de leniência com um intervalo de confiança de 95%. Notamos que o False Smile possui uma média maior de leniência em relação ao baseline. **No geral, uma pessoa sorrindo tem em média mais leniência (p = .003).**
+
+```{r}
+cis_means %>%
+    ggplot(aes(y=name, x=statistic, xmin=conf.low, xmax=conf.high)) +
+    geom_linerange() +
+    geom_point(size=3) +
+    xlab("Leniência") + 
+    ylab("Sorriso") +
+    theme(plot.title=element_text(hjust=0.5), text=element_text(size=12)) +
+    labs(caption = "Figura 6: Média de leniência por Sorriso.")
+ggsave("figure6.png", width=8, height = 5, dpi=600)
+```
+
+## Comparação com o Baseline
+
+Comparando cada sorriso com o baseline (Sem sorriso), temos na Figura 7, que todos os cenários são melhores ou com uma diferença desprezível próxima a zero, ou com uma grande diferença de cerca de 1,5. **Para cada tipo de sorriso, calculamos um p_valor de respectivamente .03, .04 e .003, ou seja, todos têm um efeito significativo em relação ao baseline.** São necessários mais dados para se ter uma melhor precisão nas estimativas.
+
+```{r}
+cis_smiles_comp %>%
+    ggplot(aes(y=name, x=statistic, xmin=conf.low, xmax=conf.high)) +
+    geom_linerange() +
+    geom_point(size=3) +
+    xlab("Coeficiente de Pearson (r)") + 
+    ylab("SAT") +
+    theme(plot.title=element_text(hjust=0.5), text=element_text(size=12)) +
+    geom_point(size=3) +
+    labs(caption = "Figura 7: Diferença entre as médias em relação ao Baseline.")
+ggsave("figure7.png", width=8, height = 5, dpi=600)
+```
+
+## Teste de Hipótese
+
+```{r}
+t.test(smiles %>% filter(with_smile == "yes") %>% pull(leniency),
+       smiles %>% filter(with_smile == "no") %>% pull(leniency))%>% 
+  tidy()
+```
+
+```{r}
+t.test(smiles %>% filter(smile == "felt smile") %>% pull(leniency),
+       smiles %>% filter(smile == "no smile (control)") %>% pull(leniency))%>% 
+  tidy()
+```
+
+```{r}
+t.test(smiles %>% filter(smile == "false smile") %>% pull(leniency),
+       smiles %>% filter(smile == "no smile (control)") %>% pull(leniency))%>% 
+  tidy()
+```
+
+```{r}
+t.test(smiles %>% filter(smile == "miserable smile") %>% pull(leniency),
+       smiles %>% filter(smile == "no smile (control)") %>% pull(leniency))%>% 
+  tidy()
+```
+# Referências
+
+1 - https://github.com/cienciadedados-ufcg/estudo-ics-utils/blob/main/data/sat-gpa.csv
+2 - LaFrance, M., & Hecht, M. A. (1995) Why smiles generate leniency. Personality and Social Psychology Bulletin, 21, 207-214.
+3 - https://github.com/cienciadedados-ufcg/estudo-ics-utils/blob/main/data/leniency.csv

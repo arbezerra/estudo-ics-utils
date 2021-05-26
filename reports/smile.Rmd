@@ -23,7 +23,7 @@ knitr::opts_chunk$set(tidy = FALSE,
 smiles = read_csv(here::here("data/leniency.csv"), col_types = "cdc") 
                   
 
-glimpse(smile)
+glimpse(smiles)
 ```
 ```{r}
 
